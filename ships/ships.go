@@ -1,23 +1,43 @@
 package ships
 
 import (
-	k "github.com/jsutton9/iron-orbit/kinematics"
+	m "github.com/jsutton9/iron-orbit/materials"
+	p "github.com/jsutton9/iron-orbit/parts"
+	v "github.com/jsutton9/iron-orbit/vector"
 )
 
 type Ship struct {
-	P k.Vector
-	V k.Vector
+	M float64
+	P v.Vector
+	V v.Vector
+	Thrusters []p.Thruster
+	CargoMaterials []m.Material
 }
 
-func (ship Ship) Position() k.Vector {
+func (ship Ship) Position() v.Vector {
 	return ship.P
 }
-func (ship *Ship) SetPosition(position k.Vector) {
+func (ship *Ship) SetPosition(position v.Vector) {
 	ship.P = position
 }
-func (ship Ship) Velocity() k.Vector {
+func (ship Ship) Velocity() v.Vector {
 	return ship.V
 }
-func (ship *Ship) AddVelocity(deltaV k.Vector) {
+func (ship *Ship) AddVelocity(deltaV v.Vector) {
 	ship.V = ship.V.Plus(deltaV)
+}
+func (ship *Ship) Thrust(deltaT float64) {
+	for _, thruster := range ship.Thrusters {
+		for i, _ := range ship.CargoMaterials {
+			mat := &ship.CargoMaterials[i]
+			if (mat.Type != thruster.FuelType) {
+				continue
+			}
+			impulse, cost := thruster.Impulse(deltaT, mat.Mass)
+			mat.Mass -= cost
+			ship.M -= cost
+			ship.AddVelocity(impulse.Scale(1/ship.M))
+			break
+		}
+	}
 }
