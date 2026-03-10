@@ -1,4 +1,4 @@
-package parts
+package thrusters
 
 import (
 	"math"

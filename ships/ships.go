@@ -2,7 +2,7 @@ package ships
 
 import (
 	m "github.com/jsutton9/iron-orbit/materials"
-	p "github.com/jsutton9/iron-orbit/parts"
+	t "github.com/jsutton9/iron-orbit/thrusters"
 	v "github.com/jsutton9/iron-orbit/vector"
 )
 
@@ -10,7 +10,7 @@ type Ship struct {
 	M float64
 	P v.Vector
 	V v.Vector
-	Thrusters []p.Thruster
+	Thrusters []t.Thruster
 	CargoMaterials []m.Material
 }
 
