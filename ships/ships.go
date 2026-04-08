@@ -1,12 +1,14 @@
 package ships
 
 import (
+
 	m "github.com/jsutton9/iron-orbit/materials"
 	t "github.com/jsutton9/iron-orbit/thrusters"
 	v "github.com/jsutton9/iron-orbit/vector"
 )
 
 type Ship struct {
+	Id int
 	M float64
 	P v.Vector
 	V v.Vector
