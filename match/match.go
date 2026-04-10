@@ -28,11 +28,51 @@ type MovementUpdate struct {
 	V v.Vector
 }
 
+type Broker[T any] struct {
+	Sub chan chan T
+	Unsub chan chan T
+
+	quit chan struct{}
+	publish chan T
+}
+
+func NewBroker[T any]() *Broker[T] {
+	return &Broker[T]{
+		Sub: make(chan chan T),
+		Unsub: make(chan chan T),
+
+		quit: make(chan struct{}),
+		publish: make(chan T),
+	}
+}
+
+func (b *Broker[T]) start() {
+	subs := map[chan T]struct{}{}
+	for {
+		select {
+		case <-b.quit:
+			for range b.publish {}
+			return
+		case ch := <-b.Sub:
+			subs[ch] = struct{}{}
+		case ch := <-b.Unsub:
+			delete(subs, ch)
+		case update := <-b.publish:
+			for ch, _ := range subs {
+				ch <- update
+			}
+		}
+	}
+}
+
 type Match struct {
 	Space k.Space
 	Ships []ShipAndPilot
 	Mode TimeMode
-	MovementChannel chan MovementUpdate
+
+	QuitChannel chan struct{}
+	TimeChannel chan TimeMode
+	MovementBroker *Broker[MovementUpdate]
 }
 
 func (match Match) Step() {
@@ -40,22 +80,23 @@ func (match Match) Step() {
 	for i, _ := range match.Ships {
 		match.Ships[i].Pilot.Update()
 		match.Ships[i].Ship.Thrust(match.Space.TimeStep)
-		s := match.Ships[i].Ship
-		match.MovementChannel <- MovementUpdate{s.Id, s.P, s.V}
+		s := &(match.Ships[i].Ship)
+		match.MovementBroker.publish <- MovementUpdate{s.Id, s.P, s.V}
 	}
 }
 
-func (match Match) Run(quitChannel chan int, timeChannel chan TimeMode) {
+func (match Match) Run(quitChannel chan struct{}, timeChannel chan TimeMode) {
 	timer := time.NewTimer(0)
 	duration := time.Duration(match.Space.TimeStep*float64(time.Second))
+	go match.MovementBroker.start()
 	for _, s := range match.Ships {
 		match.Space.AddBody(&(s.Ship))
-		match.MovementChannel <- MovementUpdate{s.Ship.Id, s.Ship.P, s.Ship.V}
 	}
 	for {
 		if match.Mode == Pause {
 			select {
 			case <- quitChannel:
+				match.MovementBroker.quit <- struct{}{}
 				return
 			case match.Mode = <-timeChannel:
 			}
@@ -65,6 +106,7 @@ func (match Match) Run(quitChannel chan int, timeChannel chan TimeMode) {
 		} else if match.Mode == RealTime {
 			select {
 			case <- quitChannel:
+				match.MovementBroker.quit <- struct{}{}
 				return
 			case match.Mode = <-timeChannel:
 			case <- timer.C:
@@ -74,6 +116,7 @@ func (match Match) Run(quitChannel chan int, timeChannel chan TimeMode) {
 		} else {
 			select {
 			case <- quitChannel:
+				match.MovementBroker.quit <- struct{}{}
 				return
 			case match.Mode = <-timeChannel:
 			default:

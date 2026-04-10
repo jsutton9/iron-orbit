@@ -17,7 +17,10 @@ func main() {
 		k.Space{1.0, 0.01, 0, []k.GravitySource{}, []k.BodyState{}},
 		[]m.ShipAndPilot{},
 		m.Fast,
-		make(chan m.MovementUpdate)}
+		make(chan struct{}),
+		make(chan m.TimeMode),
+		m.NewBroker[m.MovementUpdate](),
+	}
 
 	match.Ships = append(match.Ships, m.ShipAndPilot{
 		s.Ship{
@@ -35,12 +38,14 @@ func main() {
 
 	match.Space.AddBody(&(match.Ships[0].Ship))
 
-	quitChannel := make(chan int, 2)
+	quitChannel := make(chan struct{}, 2)
 	timeChannel := make(chan m.TimeMode, 2)
+	updates := make(chan m.MovementUpdate)
 
 	go func() {
+		match.MovementBroker.Sub <- updates
 		for i := 0; i < 1000; i++ {
-			movementUpdate := <- match.MovementChannel
+			movementUpdate := <- updates
 			if (i % 100 == 0) {
 				t := float64(i) * match.Space.TimeStep
 				p := movementUpdate.P
@@ -48,8 +53,8 @@ func main() {
 				fmt.Printf("t=%4.1f P=(%5.2f, %5.2f) V=(%5.2f, %5.2f)\n", t, p.X, p.Y, v.X, v.Y)
 			}
 		}
-		quitChannel <- 0
-		for range match.MovementChannel {}
+		quitChannel <- struct{}{}
+		for range updates {}
 	}()
 
 	match.Run(quitChannel, timeChannel)
