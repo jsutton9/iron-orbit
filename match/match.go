@@ -22,7 +22,7 @@ type ShipAndPilot struct {
 	Pilot p.Pilot
 }
 
-type MovementUpdate struct {
+type TrackingUpdate struct {
 	Id int
 	P v.Vector
 	V v.Vector
@@ -72,7 +72,7 @@ type Match struct {
 
 	QuitChannel chan struct{}
 	TimeChannel chan TimeMode
-	MovementBroker *Broker[MovementUpdate]
+	TrackingBroker *Broker[TrackingUpdate]
 }
 
 func (match Match) Step() {
@@ -81,44 +81,44 @@ func (match Match) Step() {
 		match.Ships[i].Pilot.Update()
 		match.Ships[i].Ship.Thrust(match.Space.TimeStep)
 		s := &(match.Ships[i].Ship)
-		match.MovementBroker.publish <- MovementUpdate{s.Id, s.P, s.V}
+		match.TrackingBroker.publish <- TrackingUpdate{s.Id, s.P, s.V}
 	}
 }
 
-func (match Match) Run(quitChannel chan struct{}, timeChannel chan TimeMode) {
+func (match Match) Run() {
 	timer := time.NewTimer(0)
 	duration := time.Duration(match.Space.TimeStep*float64(time.Second))
-	go match.MovementBroker.start()
+	go match.TrackingBroker.start()
 	for _, s := range match.Ships {
 		match.Space.AddBody(&(s.Ship))
 	}
 	for {
 		if match.Mode == Pause {
 			select {
-			case <- quitChannel:
-				match.MovementBroker.quit <- struct{}{}
+			case <- match.QuitChannel:
+				match.TrackingBroker.quit <- struct{}{}
 				return
-			case match.Mode = <-timeChannel:
+			case match.Mode = <-match.TimeChannel:
 			}
 		} else if match.Mode == OneStep {
 			match.Step()
 			match.Mode = Pause
 		} else if match.Mode == RealTime {
 			select {
-			case <- quitChannel:
-				match.MovementBroker.quit <- struct{}{}
+			case <- match.QuitChannel:
+				match.TrackingBroker.quit <- struct{}{}
 				return
-			case match.Mode = <-timeChannel:
+			case match.Mode = <-match.TimeChannel:
 			case <- timer.C:
 				timer = time.NewTimer(duration)
 				match.Step()
 			}
 		} else {
 			select {
-			case <- quitChannel:
-				match.MovementBroker.quit <- struct{}{}
+			case <- match.QuitChannel:
+				match.TrackingBroker.quit <- struct{}{}
 				return
-			case match.Mode = <-timeChannel:
+			case match.Mode = <-match.TimeChannel:
 			default:
 				match.Step()
 			}
